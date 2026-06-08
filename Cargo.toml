@@ -8,6 +8,11 @@ anyhow = "1.0.102"
 chrono = "0.4.45"
 clap = { version = "4.6.1", features = ["derive"] }
 colored = "3.1.1"
-derive_more = { version = "2.1.1", features = ["display", "from"] }
 users = "0.11.0"
 walkdir = "2.5.0"
+
+[profile.release]
+lto = true
+strip = true
+incremental = false
+panic = "abort"
