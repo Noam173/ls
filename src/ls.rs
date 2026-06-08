@@ -1,3 +1,4 @@
+use anyhow::Context;
 use chrono::{DateTime, Local};
 use clap::Parser;
 use colored::Colorize;
@@ -66,7 +67,10 @@ pub fn main() -> anyhow::Result<()> {
 }
 fn iter_path(p: &Path, long: bool) -> anyhow::Result<()> {
     let suffix = p.extension().and_then(|f| f.to_str()).unwrap_or("");
-    let file_name = p.file_name().and_then(|f| f.to_str()).unwrap();
+    let file_name = p
+        .file_name()
+        .and_then(|f| f.to_str())
+        .with_context(|| "smt went wrong")?;
     let mut name = file_name.white();
     let meta = p.symlink_metadata()?;
 
