@@ -28,21 +28,21 @@ pub fn main() -> Result<()> {
     #[cfg(feature = "dhat-heap")]
     let _profiler = dhat::Profiler::new_heap();
     let args = Args::parse();
+    if args.long {
+        println!(
+            "{} {} {} {} {} {}",
+            "Permissions".underline(),
+            "Size".underline(),
+            "User".underline(),
+            "Group".underline(),
+            "Date Modified".underline(),
+            "Name".underline()
+        );
+    }
     for path in paths(args.paths)? {
         let path = path.to_str().with_context(|| "coudnt convert")?;
-        if !args.long {
-            println!("{}", path.underline().bold());
-        } else {
-            println!(
-                "{} {} {} {} {} {}",
-                "Permissions".underline(),
-                "Size".underline(),
-                "User".underline(),
-                "Group".underline(),
-                "Date Modified".underline(),
-                "Name".underline()
-            );
-        }
+        println!("{}", path.underline().bold());
+
         let mut walk = WalkDir::new(path)
             .min_depth(args.min_depth)
             .max_depth(args.max_depth)
@@ -60,6 +60,7 @@ pub fn main() -> Result<()> {
                 Ok(())
             })?;
         }
+        println!();
     }
     Ok(())
 }
