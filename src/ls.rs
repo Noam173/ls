@@ -22,9 +22,7 @@ pub struct Args {
 pub fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let mut paths = if args.paths.is_empty() {
-        let mut v: Vec<String> = Vec::with_capacity(1);
-        v.push(current_dir()?.to_string_lossy().to_string());
-        v
+        vec![current_dir()?.to_string_lossy().to_string()]
     } else {
         args.paths
     };
