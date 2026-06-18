@@ -1,6 +1,6 @@
-use anyhow::Result;
-pub mod ls;
-fn main() -> Result<()> {
+mod ls;
+fn main() -> anyhow::Result<()> {
     ls::main()?;
+    println!();
     Ok(())
 }

@@ -3,15 +3,16 @@
 static ALLOC: dhat::Alloc = dhat::Alloc;
 const MB: u64 = 1_048_576;
 const KB: u64 = 1_024;
-use anyhow::Context;
+use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
 use clap::Parser;
 use colored::Colorize;
 use std::env::current_dir;
+use std::fs::canonicalize;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Clone)]
 pub struct Args {
     #[clap(short('a'))]
     all: bool,
@@ -19,31 +20,19 @@ pub struct Args {
     long: bool,
     #[clap(long("max"), default_value_t = 1)]
     max_depth: usize,
-    #[clap(long("min"), default_value_t = 0)]
+    #[clap(long("min"), default_value_t = 1)]
     min_depth: usize,
     pub paths: Vec<String>,
 }
-
-pub fn main() -> anyhow::Result<()> {
+pub fn main() -> Result<()> {
     #[cfg(feature = "dhat-heap")]
     let _profiler = dhat::Profiler::new_heap();
     let args = Args::parse();
-    let mut paths = if args.paths.is_empty() {
-        vec![current_dir()?.to_string_lossy().to_string()]
-    } else {
-        args.paths
-    };
-    paths.dedup();
-    paths.into_iter().try_for_each(|p| -> anyhow::Result<()> {
+    for path in paths(args.paths)? {
+        let path = path.to_str().with_context(|| "coudnt convert")?;
         if !args.long {
-            println!("{}", p.underline().bold());
-        }
-        let mut walk = WalkDir::new(p)
-            .min_depth(args.min_depth)
-            .max_depth(args.max_depth)
-            .into_iter();
-
-        if args.long {
+            println!("{}", path.underline().bold());
+        } else {
             println!(
                 "{} {} {} {} {} {}",
                 "Permissions".underline(),
@@ -54,6 +43,11 @@ pub fn main() -> anyhow::Result<()> {
                 "Name".underline()
             );
         }
+        let mut walk = WalkDir::new(path)
+            .min_depth(args.min_depth)
+            .max_depth(args.max_depth)
+            .sort_by_file_name()
+            .into_iter();
         if !args.all {
             walk.filter_entry(|e| !is_hidden(e))
                 .try_for_each(|entry| -> anyhow::Result<()> {
@@ -66,10 +60,23 @@ pub fn main() -> anyhow::Result<()> {
                 Ok(())
             })?;
         }
-        Ok(())
-    })?;
+    }
     Ok(())
 }
+fn paths(paths: Vec<String>) -> Result<Vec<PathBuf>> {
+    let mut paths: Vec<PathBuf> = if paths.is_empty() {
+        vec![current_dir()?]
+    } else {
+        paths
+            .into_iter()
+            .map(canonicalize)
+            .collect::<std::io::Result<Vec<PathBuf>>>()?
+    };
+    paths.sort();
+    paths.dedup();
+    Ok(paths)
+}
+
 fn iter_path(p: &Path, long: bool) -> anyhow::Result<()> {
     let suffix = p.extension().and_then(|f| f.to_str()).unwrap_or("");
     let file_name = p
@@ -85,6 +92,7 @@ fn iter_path(p: &Path, long: bool) -> anyhow::Result<()> {
     } else {
         match suffix {
             "toml" | "py" | "rs" => name = name.yellow(),
+            "csv" | "parquet" => name = name.green(),
             _ => (),
         }
         if mode & 0o111 != 0 {
@@ -93,7 +101,7 @@ fn iter_path(p: &Path, long: bool) -> anyhow::Result<()> {
     }
 
     if !long {
-        println!("{}", name);
+        print!("{}  ", name);
         return Ok(());
     }
 
