@@ -1,3 +1,8 @@
+#[cfg(feature = "dhat-heap")]
+#[global_allocator]
+static ALLOC: dhat::Alloc = dhat::Alloc;
+const MB: u64 = 1_048_576;
+const KB: u64 = 1_024;
 use anyhow::Context;
 use chrono::{DateTime, Local};
 use clap::Parser;
@@ -14,12 +19,14 @@ pub struct Args {
     long: bool,
     #[clap(long("max"), default_value_t = 1)]
     max_depth: usize,
-    #[clap(long("min"), default_value_t = 1)]
+    #[clap(long("min"), default_value_t = 0)]
     min_depth: usize,
     pub paths: Vec<String>,
 }
 
 pub fn main() -> anyhow::Result<()> {
+    #[cfg(feature = "dhat-heap")]
+    let _profiler = dhat::Profiler::new_heap();
     let args = Args::parse();
     let mut paths = if args.paths.is_empty() {
         vec![current_dir()?.to_string_lossy().to_string()]
@@ -71,15 +78,16 @@ fn iter_path(p: &Path, long: bool) -> anyhow::Result<()> {
         .with_context(|| "smt went wrong")?;
     let mut name = file_name.white();
     let meta = p.symlink_metadata()?;
-
-    if p.is_dir() {
+    let mode = meta.permissions().mode();
+    let is_dir = meta.file_type().is_dir();
+    if is_dir {
         name = name.blue();
     } else {
         match suffix {
             "toml" | "py" | "rs" => name = name.yellow(),
             _ => (),
         }
-        if meta.permissions().mode() & 0o111 != 0 {
+        if mode & 0o111 != 0 {
             name = name.green().bold();
         }
     }
@@ -89,13 +97,11 @@ fn iter_path(p: &Path, long: bool) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let mode = meta.permissions().mode();
-
     let d = "-".white().bold();
     let r = "r".yellow().bold();
     let w = "w".red().bold();
     let x = "x".green().bold().underline();
-    let kind = if p.is_dir() {
+    let kind = if is_dir {
         "d".blue().bold()
     } else {
         ".".white()
@@ -113,14 +119,13 @@ fn iter_path(p: &Path, long: bool) -> anyhow::Result<()> {
         if mode & 0o002 != 0 { &w } else { &d },
         if mode & 0o001 != 0 { &x } else { &d },
     );
-
     let size = meta.size();
-    let size_str = if p.is_dir() {
+    let size_str = if is_dir {
         "-".to_string().green()
-    } else if size >= 1_000_000 {
-        format!("{}M", size / 1_000_000).bold().green()
-    } else if size >= 1_000 {
-        format!("{}k", size / 1_000).bold().green()
+    } else if size >= MB {
+        format!("{}M", size / MB).bold().green()
+    } else if size >= KB {
+        format!("{}k", size / KB).bold().green()
     } else {
         size.to_string().green()
     };
