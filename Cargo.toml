@@ -1,5 +1,5 @@
 [package]
-name = "idk"
+name = "ls"
 version = "0.1.0"
 edition = "2024"
 
@@ -8,16 +8,12 @@ anyhow = "1.0.102"
 chrono = "0.4.45"
 clap = { version = "4.6.1", features = ["derive"] }
 colored = "3.1.1"
-dhat = "0.3.3"
 jwalk = "0.8.1"
+rustc-hash = "2.1.3"
 users = "0.11.0"
 
 [profile.release]
 lto = true
 strip = true
-incremental = false
 panic = "abort"
 codegen-units = 1
-
-[features]
-dhat-heap = []
