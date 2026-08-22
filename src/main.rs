@@ -89,11 +89,12 @@ pub fn main() -> Result<()> {
             "Name".underline()
         )?;
     }
-
-    for path in paths(args.paths)? {
-        let path_str = path.to_str().with_context(|| "coudnt convert")?;
-        writeln!(out, "{}", path_str.underline().bold())?;
-
+    let paths = paths(args.paths)?;
+    for path in paths.iter() {
+        if paths.len() > 1 {
+            let path_str = path.to_str().with_context(|| "coudnt convert")?;
+            writeln!(out, "{}", path_str.underline().bold())?;
+        }
         let walk = if args.all {
             WalkDir::new(path).skip_hidden(false)
         } else {
