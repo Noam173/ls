@@ -11,7 +11,8 @@ use std::env::current_dir;
 use std::fs::canonicalize;
 use std::io::{BufWriter, Write, stdout};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
 #[derive(Debug, Clone, ValueEnum)]
 enum SetColor {
     Always,
@@ -49,9 +50,10 @@ impl NameCache {
         self.users
             .entry(uid)
             .or_insert_with(|| {
-                users::get_user_by_uid(uid)
-                    .map(|u| u.name().to_string_lossy().to_string())
-                    .unwrap_or_else(|| uid.to_string())
+                users::get_user_by_uid(uid).map_or_else(
+                    || uid.to_string(),
+                    |u| u.name().to_string_lossy().to_string(),
+                )
             })
             .clone()
     }
@@ -60,9 +62,10 @@ impl NameCache {
         self.groups
             .entry(gid)
             .or_insert_with(|| {
-                users::get_group_by_gid(gid)
-                    .map(|g| g.name().to_string_lossy().to_string())
-                    .unwrap_or_else(|| gid.to_string())
+                users::get_group_by_gid(gid).map_or_else(
+                    || gid.to_string(),
+                    |g| g.name().to_string_lossy().to_string(),
+                )
             })
             .clone()
     }
@@ -73,7 +76,7 @@ pub fn main() -> Result<()> {
     match args.color {
         SetColor::Always => control::set_override(true),
         SetColor::Never => control::set_override(false),
-    };
+    }
     let mut out = BufWriter::new(stdout().lock());
     let mut cache = NameCache::new();
 
@@ -90,7 +93,7 @@ pub fn main() -> Result<()> {
         )?;
     }
     let paths = paths(args.paths)?;
-    for path in paths.iter() {
+    for path in &paths {
         if paths.len() > 1 {
             let path_str = path.to_str().with_context(|| "coudnt convert")?;
             writeln!(out, "{}", path_str.underline().bold())?;
@@ -105,7 +108,7 @@ pub fn main() -> Result<()> {
         .sort(true);
 
         walk.into_iter().try_for_each(|entry| -> Result<()> {
-            iter_path(&mut out, &mut cache, entry?.path(), args.long)?;
+            iter_path(&mut out, &mut cache, &entry?.path(), args.long)?;
             Ok(())
         })?;
         out.write_all(b"\n")?;
@@ -121,21 +124,21 @@ fn paths(paths: Option<Vec<String>>) -> Result<FxHashSet<PathBuf>> {
             .into_iter()
             .map(canonicalize)
             .collect::<Result<FxHashSet<_>, _>>()?,
-        None => [current_dir()?].into_iter().collect(),
+        None => std::iter::once(current_dir()?).collect(),
     };
 
     Ok(paths)
 }
 
-fn iter_path(out: &mut impl Write, cache: &mut NameCache, p: PathBuf, long: bool) -> Result<()> {
+fn iter_path(out: &mut impl Write, cache: &mut NameCache, path: &Path, long: bool) -> Result<()> {
     let mut buf = NumBuffer::new();
-    let suffix = p.extension().and_then(|f| f.to_str()).unwrap_or("");
-    let file_name = p
+    let suffix = path.extension().and_then(|f| f.to_str()).unwrap_or("");
+    let file_name = path
         .file_name()
         .and_then(|f| f.to_str())
         .with_context(|| "smt went wrong")?;
     let mut name = file_name.white();
-    let meta = p.symlink_metadata()?;
+    let meta = path.symlink_metadata()?;
     let mode = meta.permissions().mode();
     let is_dir = meta.file_type().is_dir();
 
@@ -154,7 +157,7 @@ fn iter_path(out: &mut impl Write, cache: &mut NameCache, p: PathBuf, long: bool
     }
 
     if !long {
-        write!(out, "{}", name)?;
+        write!(out, "{name}")?;
         out.write_all(b" ")?;
         return Ok(());
     }
